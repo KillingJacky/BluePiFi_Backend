@@ -4,6 +4,7 @@ var eddystone = require('eddystone-beacon');
 
 var exec = require('child_process').exec;
 var path = require('path');
+var ip2int = require('ip-to-int');
 
 var SSIDCharacteristic = require('./lib/SSIDCharacteristic');
 var PasswordCharacteristic = require('./lib/PasswordCharacteristic');
@@ -28,46 +29,38 @@ function newPassword(newPass) {
   password = newPass.toString('utf8');
 
   var script = path.join(__dirname, 'setNetwork.sh');
+  script += ' ';
+  script += [ssid, password].join(' ');
 
-  // exec(script,[ssid, password], function(err, stdout, stderr) {
-  //   if (err) {
-  //     console.log(err);
-  //   }
+  exec(script,[], function(err, stdout, stderr) {
+    if (err) {
+      console.log(err);
+      if (stderr) {
+        console.log(stderr);
+      }
+      ipAddressChar.checkIPAddress(false);
+      ipAddressChar.update();
+      return;
+    }
 
-  //   if (stderr) {
-  //     console.log(stderr);
-  //   }    
-
-  //   if (stdout) {
-  //     console.log(stdout);
-  //   }
-  // });
-
-  //check for ipAddress every 5 seconds
-  if(interval) {
-    clearInterval(interval);
-  }
-  interval = setInterval(checkIPAddress,5000);
-}
-
-function checkIPAddress() {
-  var interfaces = os.networkInterfaces();
-  if (interfaces['wlan0']) {
-  //if (interfaces['usb0']) {
-    var wlan0 = interfaces['wlan0'];
-    //var wlan0 = interfaces['usb0'];
-    for (var i=0; i< wlan0.length; i++) {
-      if (wlan0[i].family === 'IPv4') {
-        console.log(wlan0[i].address);
-        ipAddressChar.update(wlan0[i].address);
-        clearInterval(interval);
+    if (stdout) {
+      console.log('stdout:'+stdout);
+      if(stdout.indexOf('Failed') >= 0)
+      {
+        ipAddressChar.checkIPAddress(false);
+        ipAddressChar.update();
+        return;
       }
     }
-  }
-} 
+  });
+
+  ipAddressChar.startCheckIPAddress();
+}
+
+
 
 var service = new bleno.PrimaryService({
-	uuid: 'f9ea9184-8645-4cdc-a379-164a922fa410',
+	uuid: '76A46D65-4293-420C-B468-79FFB84FC000',
 	characteristics: [
 		ssidChar,
 		passwordChar,
@@ -75,21 +68,59 @@ var service = new bleno.PrimaryService({
 	]
 });
 
-bleno.once('advertisingStart', function(err) {
+bleno.on('advertisingStart', function(err) {
   if (err) {
     throw err;
   }
 
   console.log('on -> advertisingStart');
+
   bleno.setServices([
     service
   ]);
 });
 
-var hostname = os.hostname();
-  
-var options = {
-  name: hostname
-};
+function startAdv()
+{
+  var bdaddress = bleno.address;
 
-eddystone.advertiseUrl('http://goo.gl/uNGCsy',options);
+  if (!bdaddress) return;
+  console.log('my address: '+bdaddress);
+
+  var name = 'RPi-' + bdaddress.slice(9).toUpperCase().replace(/:/g,'');
+  console.log('name: '+name);
+
+  // var serviceUuids = ['fff0']
+
+  // bleno.startAdvertising(name, serviceUuids);
+  
+  //var hostname = os.hostname();
+
+  var options = {
+    name: name
+  };
+
+  eddystone.advertiseUrl('http://respeaker.io',options);
+}
+
+bleno.on('stateChange', function(state){
+  console.log('state -> ' + state);
+  if (state == 'poweredOn'){
+    startAdv();
+  }
+  
+});
+
+bleno.on('accept', clientAddr => {
+  console.log('accepted -> '+clientAddr);
+});
+
+bleno.on('disconnect', clientAddr => {
+  console.log('disconnected -> '+clientAddr);
+  startAdv();
+});
+
+
+
+  
+

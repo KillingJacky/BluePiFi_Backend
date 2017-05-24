@@ -1,9 +1,14 @@
 #!/bin/sh
 
-ifdown wlan0
-
 SSID="$1"
 PASS="$2"
+
+if [ -z $SSID ]; then
+  echo "SSID not set"
+  exit 1
+fi
+
+ifdown wlan0
 
 cat << EOF > /etc/wpa_supplicant/wpa_supplicant.conf
 country=GB
