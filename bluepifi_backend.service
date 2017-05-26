@@ -1,0 +1,13 @@
+[Unit]
+Description=BluePiFi Backend
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/node-bluepifi/
+ExecStart=/usr/bin/node /home/pi/node-bluepifi/index.js
+ExecReload=/bin/kill -9 $MAINPID
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

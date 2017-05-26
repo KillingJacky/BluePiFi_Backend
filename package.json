@@ -1,8 +1,9 @@
 {
-  "name": "BluePiFi-Backend",
-  "version": "0.1.0",
-  "description": "",
+  "name": "bluepifi",
+  "version": "0.1.1",
+  "description": "The backend script for BluePiFi mobile app to configure the WiFi of RPi.",
   "main": "index.js",
+  "repository": "KillingJacky/node-bluepifi",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
