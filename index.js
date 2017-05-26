@@ -131,7 +131,10 @@ bleno.on('accept', clientAddr => {
 
 bleno.on('disconnect', clientAddr => {
   console.log('disconnected -> '+clientAddr);
-  startAdv();
+  if(shouldAdv)
+  {
+    startAdv();
+  }  
 });
 
 ///-------
@@ -208,6 +211,8 @@ function do_when_button_pressed(){
   }
 }
 
+var interval_check = null;
+
 function pollcb(pin)
 {
   /*
@@ -220,14 +225,32 @@ function pollcb(pin)
   if(pin == PIHAT_BTN && state === 'pressed')
   {
     button_down_time = micro();
+    if(interval_check){
+      clearInterval(interval_check);
+    }
+    interval_check = setInterval(()=>{
+      var state_ = rpio.read(pin) ? 'released' : 'pressed';
+      if(state_ === 'pressed'){
+        var current = micro();
+        if(current - button_down_time > button_trigger_time * 1000000)
+        {
+          console.log('HAT button is long pressed');
+          do_when_button_long_pressed();
+          clearInterval(interval_check);
+          interval_check = null;
+          button_down_time = -1;
+        }
+      }else{
+        clearInterval(interval_check);
+        interval_check = null;
+        button_down_time = -1;
+      }
+    }, 100);
   }else if(pin == PIHAT_BTN && state === 'released' && button_down_time > 0)
   {
     var current = micro();
-    if(current - button_down_time > button_trigger_time * 1000000)
+    if(current - button_down_time < button_trigger_time * 1000000)
     {
-      console.log('HAT button is long pressed');
-      do_when_button_long_pressed();
-    }else{
       console.log('HAT button is pressed');
       do_when_button_pressed();
     }
