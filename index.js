@@ -1,6 +1,8 @@
 var os = require('os');
+const EventEmitter = require('events');
 var bleno = require('bleno');
 var eddystone = require('eddystone-beacon');
+var rpio = require('rpio');
 
 var exec = require('child_process').exec;
 var path = require('path');
@@ -9,6 +11,9 @@ var ip2int = require('ip-to-int');
 var SSIDCharacteristic = require('./lib/SSIDCharacteristic');
 var PasswordCharacteristic = require('./lib/PasswordCharacteristic');
 var IpAddressCharacteristic = require('./lib/IPAddressCharacteristic');
+var ledMode = require('./lib/LedModes');
+
+const myEE = new EventEmitter();
 
 var ssidChar = new SSIDCharacteristic(newSSID);
 var passwordChar = new PasswordCharacteristic(newPassword);
@@ -18,6 +23,8 @@ var ssid;
 var password;
 var ipaddress;
 var interval;
+var poweredOn = false;
+var shouldAdv = false;
 
 function newSSID(newSSID) {
   console.log(newSSID.toString('utf8'));
@@ -101,12 +108,19 @@ function startAdv()
   };
 
   eddystone.advertiseUrl('http://respeaker.io',options);
+
+  ledMode.breath_rgb(3000);
 }
 
 bleno.on('stateChange', function(state){
   console.log('state -> ' + state);
-  if (state == 'poweredOn'){
-    startAdv();
+  if (state === 'poweredOn'){
+    poweredOn = true;
+    if(shouldAdv)
+    {
+      console.log('* start advertising...');
+      startAdv();
+    }
   }
   
 });
@@ -120,7 +134,108 @@ bleno.on('disconnect', clientAddr => {
   startAdv();
 });
 
+///-------
+/// Button monitoring
+var PIHAT_BTN = 11;  //rpio uses the pin num on the 2row header
+var button_down_time = -1;
+var button_trigger_time = 3; //sec
 
+rpio.open(PIHAT_BTN, rpio.INPUT, rpio.PULL_UP);  //0: pressed 1: idle
+
+function micro(){
+  var hrTime = process.hrtime();
+  return hrTime[0] * 1000000 + hrTime[1] / 1000;
+}
+
+myEE.on('surely_powered_on', ()=>{
+  shouldAdv = true;
+  if(!poweredOn){
+    console.log('First time power on hci0, will start advertising when hci0 is up.');
+    return;
+  }
+  console.log('start advertising...');
+  startAdv();
+});
+
+function do_when_button_long_pressed(){
+  //make sure the bluetooth hardware is powered on
+  exec('hciconfig hci0 up',[], function(err, stdout, stderr) {
+    if (err) {
+      console.log('error when hciconfig hci0 up:' + err);
+      if (stderr) {
+        console.log(stderr);
+      }
+      return;
+    }
+
+    if (stdout) {
+      console.log('stdout:'+stdout);
+      // if(stdout.indexOf('Failed') >= 0)
+      // {
+      //   ipAddressChar.checkIPAddress(false);
+      //   ipAddressChar.update();
+      //   return;
+      // }
+    }
+    myEE.emit('surely_powered_on');
+  });
+}
+
+function do_when_button_pressed(){
+  if(shouldAdv){
+    console.log('stop advertising...');
+    bleno.stopAdvertising(()=>{
+      console.log('advertising stopped!');
+      shouldAdv = false;
+
+      ledMode.stop();
+
+      // exec('hciconfig hci0 down',[], function(err, stdout, stderr) {
+      //   if (err) {
+      //     console.log('error when hciconfig hci0 down:' + err);
+      //     if (stderr) {
+      //       console.log(stderr);
+      //     }
+      //     return;
+      //   }
+
+      //   if (stdout) {
+      //     console.log('stdout:'+stdout);
+      //   }
+      //   console.log('the bluetooth has been shut down.');
+      // });
+    });
+  }
+}
+
+function pollcb(pin)
+{
+  /*
+    * Interrupts aren't supported by the underlying hardware, so events
+    * may be missed during the 1ms poll window.  The best we can do is to
+    * print the current state after a event is detected.
+    */
+  var state = rpio.read(pin) ? 'released' : 'pressed';
+
+  if(pin == PIHAT_BTN && state === 'pressed')
+  {
+    button_down_time = micro();
+  }else if(pin == PIHAT_BTN && state === 'released' && button_down_time > 0)
+  {
+    var current = micro();
+    if(current - button_down_time > button_trigger_time * 1000000)
+    {
+      console.log('HAT button is long pressed');
+      do_when_button_long_pressed();
+    }else{
+      console.log('HAT button is pressed');
+      do_when_button_pressed();
+    }
+    button_down_time = -1;
+  }
+}
+
+rpio.poll(PIHAT_BTN, pollcb);
 
   
 
