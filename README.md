@@ -13,17 +13,11 @@ Go to user `pi`'s home
 
 Note: you need to clone the code into home because the systemd service file hard-coded the path.
 
-Clone the code
-
-    git clone https://github.com/KillingJacky/node-bluepifi.git
-
-Install bleno, follow guide here https://github.com/sandeepmistry/bleno. And especially make sure that you have stopped the bluetoothd service
-
+    sudo apt-get install bluetooth bluez libbluetooth-dev libudev-dev
     sudo systemctl stop bluetooth
     sudo systemctl disable bluetooth
-
-You can first install the dependences described in bleno's project. And then 
-
+    git clone https://github.com/KillingJacky/node-bluepifi.git
+    cd node-bluepifi
     npm install
 
 This will install all the dependences of this program (into project directory).
